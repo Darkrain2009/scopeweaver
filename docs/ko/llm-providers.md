@@ -30,4 +30,22 @@ GLM-5.3은 텍스트 입력과 100만 토큰의 문맥 창을 지원하며 추�
 
 공식 문서 확인일: **2026-10-03**. 모델 제공 여부, 계정 권한 및 정책은 바뀔 수 있습니다.
 
+## OpenRouter
+
+**LLM → 새로 만들기 → 설정 템플릿**에서 **OpenRouter**를 선택하세요. 템플릿은 양식만 채웁니다. 프로필을 저장하거나 활성화하지 않으며 OpenRouter에 연결하지 않습니다.
+
+| 항목 | 값 |
+| --- | --- |
+| 형식 | OpenAI Chat Completions |
+| 기본 URL | `https://openrouter.ai/api/v1` |
+| 모델 | `z-ai/glm-5.3-flash` (모델 드롭다운의 유일한 항목) |
+| 추론 | `enabled` |
+| 추론 강도 | `max` |
+| 문맥 창(K) | `1000` |
+| 출력 한도 | `0`(생략, 제공자 기본값) |
+
+프로필 이름과 본인의 OpenRouter API 키를 입력하세요. 템플릿을 적용해도 이미 입력한 키는 유지됩니다. 준비되면 저장하고 프로필은 별도로 활성화하세요. [GLM 5.3 Flash 모델 페이지](https://openrouter.ai/z-ai/glm-5.3-flash)를 참고하세요.
+
+OpenRouter 모델 페이지 확인일: **2026-10-08**. 계정 접근 권한과 가격은 바뀔 수 있습니다.
+
 [English guide](../llm-providers.md)

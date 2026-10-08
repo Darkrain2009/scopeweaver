@@ -28,7 +28,7 @@ import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { applyLLMProfilePreset, type LLMProfilePresetId } from "@/lib/llm-profile-presets";
+import { applyLLMProfilePreset, getLLMProfilePreset, OPENROUTER_MODEL_IDS, type LLMProfilePresetId } from "@/lib/llm-profile-presets";
 import { api } from "@/lib/api";
 import type { LLMPoolMember, LLMPoolStatus, LLMProfile, LLMRetryOverride } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -39,6 +39,18 @@ import { ProfileRetryFields, RetryPolicyPanel, ZERO_OVERRIDE } from "./_componen
 // some APIs have no thinking field and enable reasoning through effort alone.
 // Stored empty strings omit the field. Radix Select rejects empty values, so UI uses none
 // as a sentinel converted to/from empty strings by NONE/fromStore/toStore.
+type LLMFormat = "anthropic" | "openai" | "openai-responses" | "openrouter";
+
+// OpenRouter speaks OpenAI Chat Completions. Profiles keep format "openai" so the
+// database check stays valid; the panel shows OpenRouter when that base URL is set.
+function wireFormat(format: LLMFormat): "anthropic" | "openai" | "openai-responses" {
+  return format === "openrouter" ? "openai" : format;
+}
+
+function isOpenRouterBase(url?: string) {
+  return (url ?? "").toLowerCase().includes("openrouter.ai");
+}
+
 const NONE = "none";
 const fromStore = (v?: string) => (v ? v : NONE);
 const toStore = (v: string) => (v === NONE ? "" : v);
@@ -308,7 +320,7 @@ function ProfileSheet({
   const isNew = !profile;
   const [preset, setPreset] = React.useState<LLMProfilePresetId | "">("");
   const [name, setName] = React.useState("");
-  const [format, setFormat] = React.useState<"anthropic" | "openai" | "openai-responses">("anthropic");
+  const [format, setFormat] = React.useState<LLMFormat>("anthropic");
   const [model, setModel] = React.useState("");
   const [baseUrl, setBaseUrl] = React.useState("");
   const [proxy, setProxy] = React.useState("");
@@ -338,7 +350,8 @@ function ProfileSheet({
     if (!open) return;
     setPreset("");
     setName(profile?.name ?? "");
-    setFormat(profile?.format === "openai" || profile?.format === "openai-responses" ? profile.format : "anthropic");
+    const stored = profile?.format === "openai" || profile?.format === "openai-responses" ? profile.format : "anthropic";
+    setFormat(isOpenRouterBase(profile?.base_url) ? "openrouter" : stored);
     setModel(profile?.model ?? "");
     setBaseUrl(profile?.base_url ?? "");
     setProxy(profile?.proxy ?? "");
@@ -364,7 +377,7 @@ function ProfileSheet({
     if (!isNew) return;
     const next = applyLLMProfilePreset({ name, api_key: apiKey, proxy, session_header_key: sessionHeaderKey }, id);
     setPreset(id as LLMProfilePresetId);
-    setFormat(next.format);
+    setFormat(id === "openrouter" ? "openrouter" : next.format);
     setModel(next.model);
     setBaseUrl(next.base_url);
     setThinkingType(next.thinking_type);
@@ -376,6 +389,25 @@ function ProfileSheet({
     setModelsOpen(false);
   }
 
+  function chooseFormat(next: LLMFormat) {
+    setFormat(next);
+    if (next !== "openrouter") {
+      if (preset === "openrouter") setPreset("");
+      return;
+    }
+    const fields = getLLMProfilePreset("openrouter");
+    setPreset("openrouter");
+    setModel(fields.model);
+    setBaseUrl(fields.base_url);
+    setThinkingType(fields.thinking_type);
+    setEffort(fields.reasoning_effort);
+    setCw(String(fields.context_window_k));
+    setMaxTokens(String(fields.max_tokens));
+    setMaxTokensField(fromStore(fields.max_tokens_field));
+    setModels([]);
+    setModelsOpen(false);
+  }
+
   const profileId = profile ? Number(profile.id) : undefined;
 
   async function loadModels() {
@@ -383,7 +415,7 @@ function ProfileSheet({
     setLoadingModels(true);
     setModels([]);
     try {
-      const r = await api.fetchLLMModels(format, baseUrl, apiKey, proxy, profileId);
+      const r = await api.fetchLLMModels(wireFormat(format), baseUrl, apiKey, proxy, profileId);
       if (r.ok && r.models && r.models.length > 0) {
         setModels(r.models);
         setModelsOpen(true);
@@ -405,7 +437,7 @@ function ProfileSheet({
       // Test using the profile's actual reasoning parameters so unsupported fields fail here,
       // not during tasks. Pass profile ID to use the stored key when the key input is blank.
       const r = await api.testLLM(
-        format,
+        wireFormat(format),
         model,
         baseUrl,
         apiKey,
@@ -440,7 +472,7 @@ function ProfileSheet({
       const { id } = await api.saveLLMProfile({
         ...(profile ? { id: Number(profile.id) } : {}),
         name: name.trim(),
-        format,
+        format: wireFormat(format),
         model: model.trim(),
         base_url: baseUrl.trim(),
         proxy: proxy.trim(),
@@ -456,7 +488,7 @@ function ProfileSheet({
         max_tokens: Math.max(0, Number(maxTokens) || 0),
         // Output-field selection affects only OpenAI Chat Completions; other formats use defaults.
         // The backend normalizes again; this also prevents contradictory UI submissions.
-        max_tokens_field: format === "openai" ? toStore(maxTokensField) : "",
+        max_tokens_field: wireFormat(format) === "openai" ? toStore(maxTokensField) : "",
         session_header_key: sessionHeaderKey.trim(),
         retry,
       });
@@ -475,7 +507,7 @@ function ProfileSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="flex flex-col gap-0 p-0 data-[side=right]:min-w-[420px] data-[side=right]:sm:max-w-xl"
+        className="flex w-full! max-w-full! flex-col gap-0 p-0 sm:min-w-[420px] sm:max-w-xl!"
       >
         <SheetHeader className="px-4">
           <SheetTitle className="flex items-center gap-2">
@@ -503,18 +535,25 @@ function ProfileSheet({
                 <SelectContent>
                   <SelectItem value="zai-general">{swt("providers.general")}</SelectItem>
                   <SelectItem value="zai-coding-reference">{swt("providers.coding")}</SelectItem>
+                  <SelectItem value="openrouter">{swt("providers.openrouter")}</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">{swt("providers.introduction")}</p>
               {preset && (
                 <>
                   <p className={preset === "zai-coding-reference" ? "text-xs text-amber-700 dark:text-amber-400" : "text-xs text-muted-foreground"}>
-                    {swt(preset === "zai-coding-reference" ? "providers.codingHelp" : "providers.generalHelp")}
+                    {swt(preset === "openrouter" ? "providers.openrouterHelp" : preset === "zai-coding-reference" ? "providers.codingHelp" : "providers.generalHelp")}
                   </p>
-                  <p className="text-xs text-muted-foreground">{swt("providers.modelHelp")}</p>
+                  <p className="text-xs text-muted-foreground">{swt(preset === "openrouter" ? "providers.openrouterModelHelp" : "providers.modelHelp")}</p>
                   <div className="flex flex-wrap gap-3 text-xs">
-                    <a className="underline underline-offset-4" href="https://docs.z.ai/guides/llm/glm-5.3" target="_blank" rel="noreferrer">{swt("providers.officialModel")}</a>
-                    <a className="underline underline-offset-4" href="https://docs.z.ai/devpack/usage-policy" target="_blank" rel="noreferrer">{swt("providers.officialPolicy")}</a>
+                    {preset === "openrouter" ? (
+                      <a className="underline underline-offset-4" href="https://openrouter.ai/z-ai/glm-5.3-flash" target="_blank" rel="noreferrer">{swt("providers.officialOpenRouter")}</a>
+                    ) : (
+                      <>
+                        <a className="underline underline-offset-4" href="https://docs.z.ai/guides/llm/glm-5.3" target="_blank" rel="noreferrer">{swt("providers.officialModel")}</a>
+                        <a className="underline underline-offset-4" href="https://docs.z.ai/devpack/usage-policy" target="_blank" rel="noreferrer">{swt("providers.officialPolicy")}</a>
+                      </>
+                    )}
                   </div>
                 </>
               )}
@@ -532,14 +571,15 @@ function ProfileSheet({
             </div>
             <div className="grid gap-2">
               <Label>{swt("interface.m1388")}</Label>
-              <Select value={format} onValueChange={(v) => setFormat(v as "anthropic" | "openai" | "openai-responses")}>
-                <SelectTrigger>
+              <Select value={format} onValueChange={(v) => chooseFormat(v as LLMFormat)}>
+                <SelectTrigger id="p-format">
                   <SelectValue placeholder={swt("interface.m1389")} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="anthropic">Anthropic</SelectItem>
                   <SelectItem value="openai">OpenAI (Chat Completions)</SelectItem>
                   <SelectItem value="openai-responses">OpenAI (Responses API)</SelectItem>
+                  <SelectItem value="openrouter">{swt("providers.openrouter")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -547,6 +587,18 @@ function ProfileSheet({
 
           <div className="grid gap-2">
             <Label htmlFor="p-model">{swt("interface.m0627")}</Label>
+            {format === "openrouter" ? (
+              <Select value={model} onValueChange={setModel}>
+                <SelectTrigger id="p-model" className="w-full font-mono">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {OPENROUTER_MODEL_IDS.map((id) => (
+                    <SelectItem key={id} value={id}>{id}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
             <div className="flex gap-2">
               <Input
                 id="p-model"
@@ -589,6 +641,7 @@ function ProfileSheet({
                 )}
               </Popover>
             </div>
+            )}
           </div>
 
           <div className="grid gap-2">
@@ -633,10 +686,15 @@ function ProfileSheet({
             <Input
               id="p-api-key"
               type="password"
-              placeholder={keyHint ? swt("interface.m1399", { p0: keyHint }) : "sk-…"}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={format === "openrouter" ? swt("providers.openrouterKeyPlaceholder") : keyHint ? swt("interface.m1399", { p0: keyHint }) : "sk-…"}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
             />
+            {format === "openrouter" && (
+              <p className="text-muted-foreground text-xs">{swt("providers.openrouterKeyHelp")}</p>
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
@@ -932,7 +990,7 @@ export default function LLMPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="truncate font-medium text-sm">{p.name}</span>
                           <Badge variant="outline" className="uppercase">
-                            {p.format}
+                            {isOpenRouterBase(p.base_url) ? swt("providers.openrouter") : p.format}
                           </Badge>
                           <Badge variant="outline" className={cn("ml-auto", h.cls)} title={h.hint}>
                             {h.label}

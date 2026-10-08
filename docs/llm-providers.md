@@ -30,4 +30,22 @@ Enter a profile name and your own API key. Applying either template preserves an
 
 Verified against official documentation on **2026-10-03**. Provider availability, account entitlement, and policies may change.
 
+## OpenRouter
+
+Open **LLM → New → Configuration template** and choose **OpenRouter**. The template fills the form only. It does not save a profile, activate one, or contact OpenRouter.
+
+| Field | Value |
+| --- | --- |
+| Format | OpenAI Chat Completions |
+| Base URL | `https://openrouter.ai/api/v1` |
+| Model | `z-ai/glm-5.3-flash` (the only choice in the model dropdown) |
+| Thinking | `enabled` |
+| Reasoning effort | `max` |
+| Context window (K) | `1000` |
+| Output limit | `0` (omit; provider default) |
+
+Enter a profile name and your own OpenRouter API key. Applying the template keeps a key you already typed. Save when ready, then activate the profile separately. See the [GLM 5.3 Flash model page](https://openrouter.ai/z-ai/glm-5.3-flash).
+
+Checked against the OpenRouter model page on **2026-10-08**. Account access and pricing can change.
+
 [한국어 안내](ko/llm-providers.md)

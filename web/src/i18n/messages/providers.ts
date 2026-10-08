@@ -9,6 +9,12 @@ export const en = {
   modelHelp: "GLM-5.3 is text-only with a 1M-token context. Reasoning must stay enabled; supported effort levels are low, high, and max. This template selects max and leaves the output limit at 0 (provider default). Review these settings if you change the model.",
   officialModel: "GLM-5.3 model guide",
   officialPolicy: "Coding Plan usage policy",
+  openrouter: "OpenRouter",
+  openrouterHelp: "Uses your OpenRouter API key with OpenAI Chat Completions at https://openrouter.ai/api/v1. Choosing this template does not save the profile or contact OpenRouter.",
+  openrouterModelHelp: "The model list is z-ai/glm-5.3-flash. Reasoning starts enabled at effort max, and the context window is 1000K. Enter your own API key below.",
+  officialOpenRouter: "GLM 5.3 Flash on OpenRouter",
+  openrouterKeyPlaceholder: "Paste your OpenRouter API key",
+  openrouterKeyHelp: "Paste the key, then use Test connection. The test sends it to OpenRouter and does not save the profile.",
 };
 export const ko: Record<keyof typeof en, string> = {
   template: "설정 템플릿(새 프로필 전용)",
@@ -21,4 +27,10 @@ export const ko: Record<keyof typeof en, string> = {
   modelHelp: "GLM-5.3은 텍스트 전용이며 문맥 한도는 100만 토큰입니다. 추론은 항상 켜야 하며 지원 강도는 low, high, max입니다. 템플릿은 max를 선택하고 출력 한도는 0(제공자 기본값)으로 둡니다. 모델을 바꾸면 이 설정도 확인하세요.",
   officialModel: "GLM-5.3 모델 안내",
   officialPolicy: "Coding Plan 이용 정책",
+  openrouter: "OpenRouter",
+  openrouterHelp: "본인의 OpenRouter API 키로 https://openrouter.ai/api/v1 의 OpenAI Chat Completions를 사용합니다. 이 템플릿을 골라도 프로필이 저장되거나 OpenRouter에 연결되지 않습니다.",
+  openrouterModelHelp: "모델 목록은 z-ai/glm-5.3-flash입니다. 추론은 강도 max로 켜지고 문맥 창은 1000K입니다. 아래에 본인의 API 키를 입력하세요.",
+  officialOpenRouter: "OpenRouter의 GLM 5.3 Flash",
+  openrouterKeyPlaceholder: "OpenRouter API 키를 붙여넣으세요",
+  openrouterKeyHelp: "키를 붙여넣은 뒤 연결 테스트를 누르세요. 테스트는 키를 OpenRouter로 보내며 프로필은 저장하지 않습니다.",
 };

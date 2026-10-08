@@ -28,6 +28,23 @@ test("applying a template preserves entered secrets and unrelated draft preferen
   assert.equal(next.model, "user-selected-model", "the preset does not lock model editing");
 });
 
+test("OpenRouter template uses the supplied model id and keeps the entered API key", () => {
+  const preset = getLLMProfilePreset("openrouter");
+  assert.equal(preset.format, "openai");
+  assert.equal(preset.base_url, "https://openrouter.ai/api/v1");
+  assert.equal(preset.model, "z-ai/glm-5.3-flash");
+  assert.equal(preset.thinking_type, "enabled");
+  assert.equal(preset.reasoning_effort, "max");
+  assert.equal(preset.context_window_k, 1000);
+  assert.equal(preset.max_tokens, 0);
+  assert.equal(preset.max_tokens_field, "");
+  const draft = Object.freeze({ name: "OpenRouter", api_key: "sk-or-user", proxy: "", model: "other" });
+  const next = applyLLMProfilePreset(draft, "openrouter");
+  assert.equal(next.api_key, "sk-or-user");
+  assert.equal(next.model, "z-ai/glm-5.3-flash");
+  assert.equal(draft.model, "other");
+});
+
 test("unsupported template IDs fail explicitly without changing the draft", () => {
   const draft = { api_key: "keep", model: "keep-model" };
   for (const id of ["", "glm-unknown", "__proto__", "zai-general-extra"]) {
