@@ -259,6 +259,84 @@ ORDER BY day`, days)
 	return out, nil
 }
 
+// JudgeDayUsage is one UTC-day token bucket for the intercept fallback judge,
+// for the config page's recent-spend sparkline.
+type JudgeDayUsage struct {
+	Date         string `json:"date"` // YYYY-MM-DD (UTC)
+	Calls        int    `json:"calls"`
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
+}
+
+// JudgeUsage is the cumulative token spend of the intercept fallback judge
+// (worker='judge' rows in the always-on ledger), plus a recent daily series.
+type JudgeUsage struct {
+	Calls            int             `json:"calls"`
+	InputTokens      int             `json:"input_tokens"`
+	OutputTokens     int             `json:"output_tokens"`
+	CacheReadTokens  int             `json:"cache_read_tokens"`
+	CacheWriteTokens int             `json:"cache_write_tokens"`
+	Daily            []JudgeDayUsage `json:"daily"`
+}
+
+// maxJudgeUsageDays bounds the zero-filled daily series.
+const maxJudgeUsageDays = 366
+
+// JudgeUsageStats returns the fallback judge's all-time token totals and a
+// per-day series over the past `days` UTC days ending today (default 30, at most
+// maxJudgeUsageDays). Sourced from the always-on llm_usage ledger, so it is
+// accurate across pool rotation and interrupted/failed judge calls. Days without
+// judge calls are returned as zero buckets so the series keeps calendar spacing.
+// days only bounds the daily series; totals are all-time.
+func (d *DB) JudgeUsageStats(days int) (JudgeUsage, error) {
+	if days <= 0 {
+		days = 30
+	}
+	if days > maxJudgeUsageDays {
+		days = maxJudgeUsageDays
+	}
+	var u JudgeUsage
+	err := d.QueryRow(`
+SELECT COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0),
+       COALESCE(SUM(cache_read),0), COALESCE(SUM(cache_write),0)
+FROM llm_usage
+WHERE worker = 'judge'`).Scan(&u.Calls, &u.InputTokens, &u.OutputTokens,
+		&u.CacheReadTokens, &u.CacheWriteTokens)
+	if err != nil {
+		return JudgeUsage{}, err
+	}
+	rows, err := d.Query(`
+WITH buckets AS (
+    SELECT (now() AT TIME ZONE 'UTC')::date - n AS day
+    FROM generate_series(0, $1::int - 1) AS n
+)
+SELECT to_char(b.day, 'YYYY-MM-DD'),
+       COUNT(u.id), COALESCE(SUM(u.input_tokens),0), COALESCE(SUM(u.output_tokens),0)
+FROM buckets b
+LEFT JOIN llm_usage u
+  ON u.worker = 'judge'
+ AND u.ts >= b.day::timestamp AT TIME ZONE 'UTC'
+ AND u.ts < (b.day + 1)::timestamp AT TIME ZONE 'UTC'
+GROUP BY b.day
+ORDER BY b.day`, days)
+	if err != nil {
+		return JudgeUsage{}, err
+	}
+	defer rows.Close()
+	u.Daily = []JudgeDayUsage{}
+	for rows.Next() {
+		var day JudgeDayUsage
+		if err := rows.Scan(&day.Date, &day.Calls, &day.InputTokens, &day.OutputTokens); err != nil {
+			return JudgeUsage{}, err
+		}
+		u.Daily = append(u.Daily, day)
+	}
+	if err := rows.Err(); err != nil {
+		return JudgeUsage{}, err
+	}
+	return u, nil
+}
+
 // ParseExpID turns the exploration-id segment parsed from a session string into an
 // int64 (0 when empty/non-numeric, e.g. chat sessions keyed by conversation id).
 func ParseExpID(s string) int64 {
